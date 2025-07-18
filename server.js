@@ -1,54 +1,38 @@
-import express from 'express';
-import axios from 'axios';
-import cors from 'cors';
-import dotenv from 'dotenv';
-import { GoogleGenerativeAI } from '@google/generative-ai';
-
-dotenv.config();
-const app = express();
-const port = process.env.PORT || 3001;
-
-app.use(cors());
-app.use(express.json());
-
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-
-// Endpoint 1: R6 Tracker API Proxy
-app.get('/api/player/:platform/:username', async (req, res) => {
-  try {
-    const { platform, username } = req.params;
-    const response = await axios.get(`https://public-api.tracker.gg/v2/r6/standard/profile/${platform}/${username}`, {
-      headers: { 'TRN-Api-Key': process.env.R6TRACKER_API_KEY }
-    });
-    res.json(response.data);
-  } catch (err) {
-    res.status(500).json({ error: 'Errore chiamata a R6 Tracker API' });
-  }
-});
-
-// Endpoint 2: Gemini Strategy Generator
 app.post('/api/generate-strategy', async (req, res) => {
   try {
-    const { attacker, defender, mapName } = req.body;
+    const { players, map, site } = req.body;
+
+    const simplifiedStats = players
+      .map(p => p.stats)
+      .filter(s => s !== null)
+      .map(stats => ({
+        username: stats.username,
+        platform: stats.platform,
+        level: stats.level.value,
+        kdRatio: stats.kd.value,
+        winRate: stats.winRate.value,
+        topAttackers: stats.topAttackers.map(op => op.name),
+        topDefenders: stats.topDefenders.map(op => op.name),
+      }));
+
     const prompt = `
-Sei un esperto di Rainbow Six Siege. Genera una strategia efficace in base a:
-- Attaccanti: ${attacker.join(', ')}
-- Difensori: ${defender.join(', ')}
-- Mappa: ${mapName}
-Fornisci istruzioni per posizionamenti, gadget e rotazioni.
-`;
+Sei un esperto coach di Rainbow Six Siege...
+[Inserisci lo stesso prompt che hai nel frontend]
+...`;
 
     const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
     const result = await model.generateContent(prompt);
     const response = await result.response;
     const text = response.text();
 
-    res.json({ strategy: text });
-  } catch (err) {
-    res.status(500).json({ error: 'Errore generazione strategia con Gemini' });
-  }
-});
+    // Estrarre solo JSON da risposta:
+    const match = text.match(/```json\n([\s\S]*?)\n```/);
+    const jsonString = match ? match[1] : text;
+    const strategy = JSON.parse(jsonString);
 
-app.listen(port, () => {
-  console.log(`✅ Server avviato su http://localhost:${port}`);
+    res.json(strategy);
+  } catch (err) {
+    console.error('Errore Gemini:', err);
+    res.status(500).json({ error: 'Errore generazione strategia' });
+  }
 });
