@@ -1,54 +1,54 @@
-require('dotenv').config();
-const express = require('express');
-const axios = require('axios');
-const cors = require('cors');
+import express from 'express';
+import axios from 'axios';
+import cors from 'cors';
+import dotenv from 'dotenv';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
+dotenv.config();
 const app = express();
-const port = 3001;
+const port = process.env.PORT || 3001;
 
-const R6TRACKER_API_KEY = process.env.R6TRACKER_API_KEY;
+app.use(cors());
+app.use(express.json());
 
-if (!R6TRACKER_API_KEY) {
-    console.error("ERRORE: La variabile d'ambiente R6TRACKER_API_KEY non è stata impostata. Crea un file .env e aggiungila.");
-    process.exit(1);
-}
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-app.use(cors()); // Abilita CORS per tutte le rotte
-
+// Endpoint 1: R6 Tracker API Proxy
 app.get('/api/player/:platform/:username', async (req, res) => {
+  try {
     const { platform, username } = req.params;
+    const response = await axios.get(`https://public-api.tracker.gg/v2/r6/standard/profile/${platform}/${username}`, {
+      headers: { 'TRN-Api-Key': process.env.R6TRACKER_API_KEY }
+    });
+    res.json(response.data);
+  } catch (err) {
+    res.status(500).json({ error: 'Errore chiamata a R6 Tracker API' });
+  }
+});
 
-    // Converte la piattaforma dal nostro formato a quello richiesto dall'API di Tracker Network
-    // 'pc' -> 'uplay', 'psn' -> 'psn', 'xbl' -> 'xbl'
-    const apiPlatform = platform === 'pc' ? 'uplay' : platform;
+// Endpoint 2: Gemini Strategy Generator
+app.post('/api/generate-strategy', async (req, res) => {
+  try {
+    const { attacker, defender, mapName } = req.body;
+    const prompt = `
+Sei un esperto di Rainbow Six Siege. Genera una strategia efficace in base a:
+- Attaccanti: ${attacker.join(', ')}
+- Difensori: ${defender.join(', ')}
+- Mappa: ${mapName}
+Fornisci istruzioni per posizionamenti, gadget e rotazioni.
+`;
 
-    const url = `https://public-api.tracker.gg/v2/r6/standard/profile/${apiPlatform}/${username}`;
+    const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const text = response.text();
 
-    try {
-        console.log(`Richiesta proxy a: ${url}`);
-        const response = await axios.get(url, {
-            headers: {
-                'TRN-Api-Key': R6TRACKER_API_KEY,
-                'Accept': 'application/json',
-                'Accept-Encoding': 'gzip'
-            }
-        });
-
-        res.json(response.data);
-
-    } catch (error) {
-        console.error("Errore durante la chiamata all'API di R6 Tracker:", error.response ? error.response.data : error.message);
-        const statusCode = error.response ? error.response.status : 500;
-        const message = error.response && error.response.data && error.response.data.message ? error.response.data.message : 'Errore del server proxy';
-        
-        if (statusCode === 404) {
-            res.status(404).json({ message: 'Giocatore non trovato. Controlla nome utente e piattaforma.' });
-        } else {
-            res.status(statusCode).json({ message });
-        }
-    }
+    res.json({ strategy: text });
+  } catch (err) {
+    res.status(500).json({ error: 'Errore generazione strategia con Gemini' });
+  }
 });
 
 app.listen(port, () => {
-    console.log(`Server proxy in ascolto sulla porta ${port}`);
+  console.log(`✅ Server avviato su http://localhost:${port}`);
 });
