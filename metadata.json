@@ -1,0 +1,5 @@
+{
+  "name": "R6 Siege Strategy Generator",
+  "description": "An application to generate Rainbow Six Siege strategies based on player statistics fetched from R6 Tracker.",
+  "requestFramePermissions": []
+}
