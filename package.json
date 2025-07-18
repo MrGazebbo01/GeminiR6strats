@@ -1,17 +1,15 @@
 {
-  "name": "r6-strategy-backend",
-  "version": "1.0.0",
-  "description": "Proxy server for R6 Tracker API",
+  "name": "r6-backend",
+  "type": "module",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
-  "author": "",
-  "license": "ISC",
   "dependencies": {
-    "axios": "^1.7.2",
+    "axios": "^1.6.0",
     "cors": "^2.8.5",
-    "dotenv": "^16.4.5",
-    "express": "^4.19.2"
+    "dotenv": "^16.0.3",
+    "express": "^4.18.2",
+    "@google/generative-ai": "^0.5.0"
   }
 }
